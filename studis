@@ -1,0 +1,335 @@
+#!/bin/bash
+DIRECTORY=/home/xvalik1/pv004lab/data_is
+LOGS=/home/xvalik1/pv004lab/data_is/data_is_file
+FAKULTA=/home/xvalik1/pv004lab/data_is/data_is_fakulty
+KRITICAL=0
+ARGV=0
+args=("$@")
+maxargc=${#args[@]}
+NEW_DIRECTORY=0
+COUNTER=0
+		
+help_print() {
+	echo "Is se ovlada volbami:"
+	echo "-f [prikaz] povoluje kriticke sekce"
+	echo "-d [cesta k souboru] zmeni cestu k adresar"
+	echo "pomoc vypise napovedu"
+	echo "smaz-adresar|smaz-adresar smaze adresar"
+	echo "dej-log (regulerni vyraz)[cesta] vypise logy"
+	echo "cesta-adresar|cesta-adresar vypise cestu k datum"
+	echo "fakulta-smaz|fakulta-smaz smaze fakultu pokud existuje"
+	echo "fakulta-nazev|fakulta-nazev zmeni nazev fakulty pokud existuje"
+	echo "fakulta-nova|fakulta-nova vytvori novou fakultu"
+	echo "fakulta-vypis|fakulta-vypis vypise vsechny fakulty"
+	exit 0
+}
+
+smaz_adresar() {
+	if [ $KRITICAL -eq 0 ] 
+		then
+			echo "smaz_adresar nema povolenou kritickou sekci" >&2
+			exit 1
+	fi
+	rm -r $DIRECTORY
+	DIRECTORY=""
+	LOGS=""
+	exit 0
+
+
+}
+
+dej_log() {	
+	ARGV=$((ARGV + 1))
+	NEXT_ARGV=$((ARGV + 1))
+	if [ "${!NEXT_ARGV}" != "" ]
+		then
+			echo "regex navic" >&2
+			exit 1
+	
+	fi
+	if [ "${!ARGV}" == "" ] 
+		then 
+			cat $LOGS
+			exit 0
+	fi
+	
+	if [ $(egrep ${!ARGV} $LOGS | wc -l) -eq 0 ]
+		then 
+			exit 1
+		else
+			egrep ${!ARGV} $LOGS 
+			exit 0
+	fi
+	exit 0	
+}
+
+zmen_adresar() {
+	ARGV=$((ARGV + 1))
+	if [ -d "${!ARGV}" ] && [ -w "${!ARGV}" ] && [ -x "${!ARGV}" ]
+		then
+			DIRECTORY=${!ARGV}
+			LOGS=$DIRECTORY/data_is_file
+			FAKULTA=$DIRECTORY/data_is_fakulty
+			touch $LOGS
+			touch $FAKULTA
+			(echo $D $A:$B.$C $$ $F $0 ${args[*]}) >> $LOGS 						
+	elif [ ! -d "${!ARGV}" ]
+		then
+			mkdir ${!ARGV} >/dev/null
+			if [ ! -d "${!ARGV}" ]
+				then 
+					echo "Soubor nejde vytvořit" >&2
+		    			exit 1	
+			else
+				DIRECTORY=${!ARGV}
+				LOGS=$DIRECTORY/data_is_file
+				FAKULTA=$DIRECTORY/data_is_fakulty
+				touch $LOGS
+				touch $FAKULTA	
+				(echo $D $A:$B.$C $$ $F $0 ${args[*]}) >> $LOGS 
+			fi
+	else
+		echo "Soubor existuje" >&2
+		exit 1	
+	fi
+}
+
+cesta_adresar() {
+	ARGV=$((ARGV + 1))
+
+	if [ "${!ARGV}" == "" ]
+		then
+			echo $DIRECTORY
+			exit 0
+	else
+		echo "nesmí mít argument" >&2
+		exit 1
+	fi
+}
+
+fakulta_smaz() {
+	ARGV=$((ARGV + 1))
+	if [ "${!ARGV}" == "" ]
+		then
+			echo "málo argumentů" >&2
+			exit 1
+	fi
+
+	NEXT_ARGV=$((ARGV + 1))
+	if [ "${!NEXT_ARGV}" != "" ]
+		then
+			echo "příliš mnoho argumentů" >&2
+			exit 1
+	fi	
+
+	if [ $(egrep "${!ARGV}" $FAKULTA | wc -l) -eq 0 ]
+    		then 
+			echo "fakulta není" >&2
+    	    		exit 1
+    	fi
+	fgrep -v ${!ARGV} $FAKULTA >> temp && mv temp $FAKULTA
+	exit 0
+}
+
+fakulta_nazev() {
+	ID=$((ARGV + 1))
+	NOVY_NAZEV=$((ARGV + 2))
+	NEXT_ARGV=$((ARGV + 3))
+
+	if [ "${!NEXT_ARGV}" != "" ] 
+		then
+			echo "argument navíc" >&2
+  			exit 1
+	fi
+	
+	if [ $(fgrep ${!ID} $FAKULTA | wc -l) -eq 0 ]
+		then 
+			echo "fakulta není" >&2
+  			exit 1
+  	fi
+	fgrep -v ${!ID} $FAKULTA >> temp && mv temp $FAKULTA
+	echo "${!ID}|${!NOVY_NAZEV}" >> $FAKULTA
+	exit 0
+}
+
+fakulta_nova() {
+	ARGV=$((ARGV + 1))
+	ID="${!ARGV}"
+	ARGV=$((ARGV + 1))
+	NAME="${!ARGV}"
+	ARGV=$((ARGV + 1))
+	if [ "${!ARGV}" != "" ]
+		then 
+			echo "příliš mnoho argumentů" >&2
+			exit 1
+	fi
+
+	if [ $(cat $FAKULTA | cut -d'|' -f1 | fgrep $ID | wc -l) -gt 0 ]
+	then 
+		echo "už použité ID" >&2
+    		exit 1
+	fi
+	
+	if [ ${#ID} -gt 8 ]
+		then
+			echo "moc dlouhé ID" >&2
+    			exit 1
+			
+	fi 
+	
+	if [ "$ID" == "" ] || [ "$NAME" == "" ]
+		then
+			echo "málo argumentů" >&2
+    			exit 1
+	fi
+	
+	echo "$ID|$NAME" >> $FAKULTA
+
+}
+
+fakulta-vypis() {
+	ARGV=$((ARGV + 1))
+	NEW_ARGV=$((ARGV + 1))
+	if [ "${!NEW_ARGV}" != "" ]
+		then
+			echo "příliš mnoho argumentů" >&2
+    			exit 1
+	fi
+	printf "%-8s | %s\n" Fakulta Název
+	echo --------------------------
+	if [ "${!ARGV}" == "" ]
+		then
+		cat $FAKULTA | sort | while read -r line;
+			do
+			Y="$(echo $line | cut -d'|' -f1 )";
+			Z="$(echo $line | cut -d'|' -f2 )";
+			printf "%-8s | %s\n" $Y "$Z"
+			done
+	else 
+		fgrep "${!ARGV}" $FAKULTA | sort | while read -r line;
+			do
+			Y="$(echo $line | cut -d'|' -f1 )";
+			Z="$(echo $line | cut -d'|' -f2 )";
+			printf "%-8s | %s\n" $Y "$Z"
+			done
+	fi
+	exit 0
+}
+
+domaci_ukol() {
+	ARGV=$((ARGV + 1))
+	while [ "${!ARGV}" != "" ]
+		do
+		if [ -f "${!ARGV}" ] 
+			then 
+			while read -r line;
+				do	
+					num="$(echo $line | cut -d'|' -f2 )";
+					if [ "$num" -eq "$num" ] 2> /dev/null
+						then 
+						last_num=${num: -1}
+						if [ $((last_num%2)) -eq 1 ]
+							then
+							((COUNTER++))
+						fi
+					fi	
+				done < "${!ARGV}"
+				
+			ARGV=$((ARGV + 1))
+		else
+			echo "soubor neexistuje" >&2
+			exit 1
+		fi
+		done
+	echo $COUNTER	
+	exit 0
+}
+
+argument_case() {
+ARGV=$((ARGV + 1))
+command=${!ARGV}
+
+case $command in
+	-f)
+		if [ $KRITICAL -eq 1 ]
+			then
+				echo "kriticka sekce podruhe" >&2
+				exit 1 
+		fi	
+		KRITICAL=1 	
+		argument_case "$@"		
+	;;
+
+	-d)
+		if [ $NEW_DIRECTORY -eq 1 ]
+			then
+				echo "druha zmena adresare" >&2	
+				exit 1
+		fi
+		zmen_adresar "$@"
+		NEW_DIRECTORY=1
+		argument_case "$@"
+	;;
+
+	pomoc)
+		help_print "$@"
+	;;
+
+	smaz-adresar|smaž-adresář)
+		smaz_adresar  "$@"
+	;;
+
+	dej-log)
+		dej_log "$@"
+	;;
+
+	cesta-adresar|cesta-adresář)
+		cesta_adresar "$@"
+	;;
+
+	fakulta-smaž|fakulta-smaz)
+		fakulta_smaz $*
+	;;
+
+	fakulta-název|fakulta-nazev)
+	fakulta_nazev "$@"
+	;;
+
+	fakulta-nová|fakulta-nova)
+	fakulta_nova "$@"
+	;;
+
+	fakulta-výpis|fakulta-vypis)
+	fakulta-vypis "$@"
+	;;
+
+	domácí-úkol)
+	domaci_ukol "$@"
+	;;
+	
+	*)
+		echo "neznamy prikaz" >&2
+		exit 1 
+	;;
+esac
+}
+
+A="$(date | cut -d' ' -f4 | cut -d':' -f1)"
+B="$(date | cut -d' ' -f4 | cut -d':' -f2)"
+C="$(date | cut -d' ' -f4 | cut -d':' -f3)"
+D="$(date --rfc-3339=date)"
+if [[ $LOGNAME == "" ]]
+	then 
+		F=x
+	else 
+		F=$LOGNAME
+fi
+
+(echo $D $A:$B.$C $$ $F $0 ${args[*]}) >> $LOGS 
+
+if [ $# -eq 0 ]
+	then
+		echo "Žádná volba, použijte pomoc pro nápovědu" >&2
+		exit 1
+fi
+argument_case "$@"
